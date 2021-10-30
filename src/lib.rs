@@ -48,6 +48,11 @@ use crate::arrays::gen_impl_futhark_types;
 use crate::entry::*;
 use crate::genc::*;
 
+const DEFAULT_CUDA_INCLUDE_PATH: &str = &"/opt/cuda/include";
+const DEFAULT_CUDA_LIBRARY_PATH: &str = &"/opt/cuda/lib64";
+const DEFAULT_OPENCL_INCLUDE_PATH: &str = &"/usr/include";
+const DEFAULT_OPENCL_LIBRARY_PATH: &str = &"/usr/lib";
+
 #[derive(StructOpt, Debug)]
 #[structopt(
     name = "genfut",
@@ -82,20 +87,20 @@ pub struct Opt {
     pub description: String,
 
     /// CUDA include path
-    #[structopt(name = "CUDA_INCLUDE_PATH", default_value = "/opt/cuda/include")]
-    pub cuda_include_path: String,
+    #[structopt(name = "CUDA_INCLUDE_PATH")]
+    pub cuda_include_path: Option<String>,
 
     /// CUDA library path
-    #[structopt(name = "CUDA_LIBRARY_PATH", default_value = "/opt/cuda/lib64")]
-    pub cuda_library_path: String,
+    #[structopt(name = "CUDA_LIBRARY_PATH")]
+    pub cuda_library_path: Option<String>,
 
     /// OpenCL include path
-    #[structopt(name = "OPENCL_INCLUDE_PATH", default_value = "/usr/include")]
-    pub opencl_include_path: String,
+    #[structopt(name = "OPENCL_INCLUDE_PATH")]
+    pub opencl_include_path: Option<String>,
 
     /// OpenCL library path
-    #[structopt(name = "OPENCL_LIBRARY_PATH", default_value = "/usr/lib")]
-    pub opencl_library_path: String,
+    #[structopt(name = "OPENCL_LIBRARY_PATH")]
+    pub opencl_library_path: Option<String>,
 }
 
 pub fn genfut(opt: Opt) {
@@ -163,9 +168,17 @@ pub fn genfut(opt: Opt) {
             generate_bindings(
                 &PathBuf::from(out_dir).join(format!("lib_{}/a.h", backend)),
                 if backend == "cuda" {
-                    Some(&opt.cuda_include_path)
+                    Some(
+                        opt.cuda_include_path
+                            .as_deref()
+                            .unwrap_or(DEFAULT_CUDA_INCLUDE_PATH),
+                    )
                 } else if backend == "opencl" {
-                    Some(&opt.opencl_include_path)
+                    Some(
+                        opt.opencl_include_path
+                            .as_deref()
+                            .unwrap_or(DEFAULT_OPENCL_INCLUDE_PATH),
+                    )
                 } else {
                     None
                 },
@@ -220,10 +233,30 @@ pub fn genfut(opt: Opt) {
     // STATIC FILES
     // build.rs
     let static_build = include_str!("static/build.rs")
-        .replace("##CUDA_INCLUDE_PATH##", &opt.cuda_include_path)
-        .replace("##CUDA_LIBRARY_PATH##", &opt.cuda_library_path)
-        .replace("##OPENCL_INCLUDE_PATH##", &opt.opencl_include_path)
-        .replace("##OPENCL_LIBRARY_PATH##", &opt.opencl_library_path);
+        .replace(
+            "##CUDA_INCLUDE_PATH##",
+            opt.cuda_include_path
+                .as_deref()
+                .unwrap_or(DEFAULT_CUDA_INCLUDE_PATH),
+        )
+        .replace(
+            "##CUDA_LIBRARY_PATH##",
+            opt.cuda_library_path
+                .as_deref()
+                .unwrap_or(DEFAULT_CUDA_LIBRARY_PATH),
+        )
+        .replace(
+            "##OPENCL_INCLUDE_PATH##",
+            opt.opencl_include_path
+                .as_deref()
+                .unwrap_or(DEFAULT_OPENCL_INCLUDE_PATH),
+        )
+        .replace(
+            "##OPENCL_LIBRARY_PATH##",
+            opt.opencl_library_path
+                .as_deref()
+                .unwrap_or(DEFAULT_OPENCL_LIBRARY_PATH),
+        );
     let mut build_file =
         File::create(PathBuf::from(out_dir).join("build.rs")).expect("File creation failed!");
     write!(&mut build_file, "{}", static_build);
