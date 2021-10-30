@@ -73,13 +73,18 @@ pub(crate) fn gen_c(in_file: &std::path::Path, out_dir: &std::path::Path) {
         io::stderr().write_all(&output.stderr).unwrap();
     }
 }
-pub(crate) fn generate_bindings(header: &std::path::Path, out: &std::path::Path) {
+pub(crate) fn generate_bindings(
+    header: &std::path::Path,
+    include_path: Option<&str>,
+    out: &std::path::Path,
+) {
     let bindings = bindgen::Builder::default()
         .header(
             header
                 .to_str()
                 .expect("[generate_bindings] Error with header!"),
         )
+        .clang_args(include_path.map(|path| format!("-I{}", path)))
         .generate()
         .expect("Unable to generate bindings");
     let out_path = PathBuf::from(out);

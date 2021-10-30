@@ -24,8 +24,8 @@ fn main() {
         .compile("a");
     #[cfg(feature = "cuda")]
     {
-        println!("cargo:rustc-link-search=native=/opt/cuda/include");
-        println!("cargo:rustc-link-search=native=/opt/cuda/lib64");
+        println!("cargo:rustc-link-search=native=##CUDA_INCLUDE_PATH##");
+        println!("cargo:rustc-link-search=native=##CUDA_LIBRARY_PATH##");
         println!("cargo:rustc-link-lib=dylib=cuda");
         println!("cargo:rustc-link-lib=dylib=nvrtc");
     }
@@ -38,21 +38,25 @@ fn main() {
         {
             cc::Build::new()
                 .file("./lib_opencl/a.c")
+                .include("##OPENCL_INCLUDE_PATH##")
                 .flag("-fPIC")
                 .flag("-std=c99")
                 .shared_flag(true)
                 .compile("a");
             println!("cargo:rustc-link-lib=dylib=OpenCL");
+            println!("cargo:rustc-link-search=native=##OPENCL_LIBRARY_PATH##");
         }
         #[cfg(target_os = "macos")]
         {
             cc::Build::new()
                 .file("./lib_opencl/a.c")
+                .include("##OPENCL_INCLUDE_PATH##")
                 .flag("-fPIC")
                 .flag("-std=c99")
                 .shared_flag(true)
                 .compile("a");
             println!("cargo:rustc-link-lib=framework=OpenCL");
+            println!("cargo:rustc-link-search=native=##OPENCL_LIBRARY_PATH##");
         }
     }
 }

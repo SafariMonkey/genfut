@@ -80,6 +80,22 @@ pub struct Opt {
         default_value = "Rust interface to Futhark library"
     )]
     pub description: String,
+
+    /// CUDA include path
+    #[structopt(name = "CUDA_INCLUDE_PATH", default_value = "/opt/cuda/include")]
+    pub cuda_include_path: String,
+
+    /// CUDA library path
+    #[structopt(name = "CUDA_LIBRARY_PATH", default_value = "/opt/cuda/lib64")]
+    pub cuda_library_path: String,
+
+    /// OpenCL include path
+    #[structopt(name = "OPENCL_INCLUDE_PATH", default_value = "/usr/include")]
+    pub opencl_include_path: String,
+
+    /// OpenCL library path
+    #[structopt(name = "OPENCL_LIBRARY_PATH", default_value = "/usr/lib")]
+    pub opencl_library_path: String,
 }
 
 pub fn genfut(opt: Opt) {
@@ -143,14 +159,19 @@ pub fn genfut(opt: Opt) {
             std::process::exit(1);
         }
 
-        #[cfg(target = "macos")]
-        if backend == "opencl" {
-            continue;
+        if !(cfg!(target_os = "macos") && backend == "opencl") {
+            generate_bindings(
+                &PathBuf::from(out_dir).join(format!("lib_{}/a.h", backend)),
+                if backend == "cuda" {
+                    Some(&opt.cuda_include_path)
+                } else if backend == "opencl" {
+                    Some(&opt.opencl_include_path)
+                } else {
+                    None
+                },
+                &PathBuf::from(out_dir).join("src"),
+            );
         }
-        generate_bindings(
-            &PathBuf::from(out_dir).join(format!("lib_{}/a.h", backend)),
-            &PathBuf::from(out_dir).join("src"),
-        );
 
         let headers =
             std::fs::read_to_string(PathBuf::from(out_dir).join(format!("lib_{}/a.h", backend)))
@@ -198,7 +219,11 @@ pub fn genfut(opt: Opt) {
 
     // STATIC FILES
     // build.rs
-    let static_build = include_str!("static/build.rs");
+    let static_build = include_str!("static/build.rs")
+        .replace("##CUDA_INCLUDE_PATH##", &opt.cuda_include_path)
+        .replace("##CUDA_LIBRARY_PATH##", &opt.cuda_library_path)
+        .replace("##OPENCL_INCLUDE_PATH##", &opt.opencl_include_path)
+        .replace("##OPENCL_LIBRARY_PATH##", &opt.opencl_library_path);
     let mut build_file =
         File::create(PathBuf::from(out_dir).join("build.rs")).expect("File creation failed!");
     write!(&mut build_file, "{}", static_build);
