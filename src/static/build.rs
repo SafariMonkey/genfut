@@ -18,7 +18,7 @@ fn main() {
         .cuda(true)
         .flag("-Xcompiler")
         .flag("-fPIC")
-        .flag("-std=c99")
+        .flag("-std=c++03")
         .flag("-w")
         .shared_flag(true)
         .compile("a");
