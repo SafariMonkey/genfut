@@ -4,7 +4,7 @@ fn main() {
     // Sequential C support
     #[cfg(feature = "sequential_c")]
     cc::Build::new()
-        .file("./lib/a.c")
+        .file("./lib_sequential_c/a.c")
         .flag("-fPIC")
         .flag("-std=c99")
         .shared_flag(true)
@@ -14,7 +14,7 @@ fn main() {
     // CUDA support
     #[cfg(feature = "cuda")]
     cc::Build::new()
-        .file("./lib/a.c")
+        .file("./lib_cuda/a.c")
         .cuda(true)
         .flag("-Xcompiler")
         .flag("-fPIC")
@@ -37,7 +37,7 @@ fn main() {
         #[cfg(not(target_os = "macos"))]
         {
             cc::Build::new()
-                .file("./lib/a.c")
+                .file("./lib_opencl/a.c")
                 .flag("-fPIC")
                 .flag("-std=c99")
                 .shared_flag(true)
@@ -47,7 +47,7 @@ fn main() {
         #[cfg(target_os = "macos")]
         {
             cc::Build::new()
-                .file("./lib/a.c")
+                .file("./lib_opencl/a.c")
                 .flag("-fPIC")
                 .flag("-std=c99")
                 .shared_flag(true)

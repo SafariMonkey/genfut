@@ -114,14 +114,28 @@ pub fn genfut(opt: Opt) {
     // In general C files are generated when build at the user.
     gen_c(&futhark_file, &out_dir);
 
-    // copy futhark file
-    if let Err(e) = std::fs::copy(futhark_file, PathBuf::from(out_dir).join("lib/a.fut")) {
-        eprintln!("Error copying file: {}", e);
-        std::process::exit(1);
-    }
+    let active_backends: &[&str] = &[
+        #[cfg(feature = "sequential_c")]
+        "sequential_c",
+        #[cfg(feature = "cuda")]
+        "cuda",
+        #[cfg(feature = "opencl")]
+        "opencl",
+    ];
 
-    #[cfg(not(all(feature = "opencl", target_os = "macos")))]
-    {
+    // Loop over active backends. `check_equivalent` is used to ensure
+    // that
+    let mut check_equivalent = Vec::new();
+    for &backend in active_backends {
+        // copy futhark file
+        if let Err(e) = std::fs::copy(
+            futhark_file,
+            PathBuf::from(out_dir).join(&format!("lib_{}/a.fut", backend)),
+        ) {
+            eprintln!("Error copying file: {}", e);
+            std::process::exit(1);
+        }
+
         // Generate bindings
         let src_dir = PathBuf::from(out_dir).join("src");
         if let Err(e) = create_dir_all(&src_dir) {
@@ -129,22 +143,59 @@ pub fn genfut(opt: Opt) {
             std::process::exit(1);
         }
 
+        #[cfg(target = "macos")]
+        if backend == "opencl" {
+            continue;
+        }
         generate_bindings(
-            &PathBuf::from(out_dir).join("lib/a.h"),
+            &PathBuf::from(out_dir).join(format!("lib_{}/a.h", backend)),
             &PathBuf::from(out_dir).join("src"),
         );
+
+        let headers =
+            std::fs::read_to_string(PathBuf::from(out_dir).join(format!("lib_{}/a.h", backend)))
+                .expect("Could not read headers");
+
+        let re_array_types = Regex::new(r"struct (futhark_.+_\d+d)\s*;").expect("Regex failed!");
+        let array_types: Vec<String> = re_array_types
+            .captures_iter(&headers)
+            .map(|c| c[1].to_owned())
+            .collect();
+        //println!("{:#?}", array_types);
+        //println!("{}", gen_impl_futhark_types(&array_types));
+
+        let re_entry_points = Regex::new(r"(?m)int futhark_entry_(.+)\(struct futhark_context \*ctx,(\s*(:?const\s*)?(:?struct\s*)?[a-z0-9_]+\s\**[a-z0-9]+,?\s?)+\);").unwrap();
+
+        let entry_points: Vec<String> = re_entry_points
+            .captures_iter(&headers)
+            .map(|c| c[0].to_owned())
+            .collect();
+
+        check_equivalent.push((
+            backend.to_owned(),
+            array_types.clone(),
+            entry_points.clone(),
+        ));
     }
 
-    let headers = std::fs::read_to_string(PathBuf::from(out_dir).join("lib/a.h"))
-        .expect("Could not read headers");
+    // verify that array types and entry points match between active backends
+    let (_, array_types, entry_points) = check_equivalent
+        .into_iter()
+        .reduce(|(backend, arr, ent), (prev_backend, prev_arr, prev_ent)| {
+            assert_eq!(
+                arr, prev_arr,
+                "Array types differ between {} and {} backend",
+                backend, prev_backend
+            );
+            assert_eq!(
+                ent, prev_ent,
+                "Entry points differ between {} and {} backend",
+                backend, prev_backend
+            );
+            (backend, arr, ent)
+        })
+        .expect("at least one backend should be active");
 
-    let re_array_types = Regex::new(r"struct (futhark_.+_\d+d)\s*;").expect("Regex failed!");
-    let array_types: Vec<String> = re_array_types
-        .captures_iter(&headers)
-        .map(|c| c[1].to_owned())
-        .collect();
-    //println!("{:#?}", array_types);
-    //println!("{}", gen_impl_futhark_types(&array_types));
     // STATIC FILES
     // build.rs
     let static_build = include_str!("static/build.rs");
@@ -184,12 +235,6 @@ pub fn genfut(opt: Opt) {
     writeln!(&mut array_file, "{}", static_array);
     writeln!(&mut array_file, "{}", gen_impl_futhark_types(&array_types));
 
-    let re_entry_points = Regex::new(r"(?m)int futhark_entry_(.+)\(struct futhark_context \*ctx,(\s*(:?const\s*)?(:?struct\s*)?[a-z0-9_]+\s\**[a-z0-9]+,?\s?)+\);").unwrap();
-
-    let entry_points: Vec<String> = re_entry_points
-        .captures_iter(&headers)
-        .map(|c| c[0].to_owned())
-        .collect();
     let static_lib = include_str!("static/static_lib.rs");
     let mut methods_file =
         File::create(PathBuf::from(out_dir).join("src/lib.rs")).expect("File creation failed!");
